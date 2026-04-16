@@ -628,6 +628,71 @@
       "HOOK_NAME": "HOOK_SCL_08",
       "FILE": "sculpture_08.glb",
       "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_09",
+      "FILE": "sculpture_09.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_10",
+      "FILE": "sculpture_10.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_11",
+      "FILE": "sculpture_11.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_12",
+      "FILE": "sculpture_12.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_13",
+      "FILE": "sculpture_13.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_14",
+      "FILE": "sculpture_14.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_15",
+      "FILE": "sculpture_15.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_16",
+      "FILE": "sculpture_16.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_17",
+      "FILE": "sculpture_17.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_18",
+      "FILE": "sculpture_18.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_19",
+      "FILE": "sculpture_19.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_20",
+      "FILE": "sculpture_20.glb",
+      "SCALE": 1.0
+    },
+    {
+      "HOOK_NAME": "HOOK_SCL_21",
+      "FILE": "sculpture_21.glb",
+      "SCALE": 1.0
     }
   ]
 }
