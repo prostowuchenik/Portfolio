@@ -1,86 +1,62 @@
 /* =========================================================
-   Віртуальне портфоліо (A-Frame) — єдиний шаблон
+   Віртуальне портфоліо (A-Frame) — Професійна редакція
    ========================================================= */
 
 const CONFIG_PATH = "./config/config.json";
 const $ = (sel) => document.querySelector(sel);
 
-/** Компонент: Блокування руху крізь вертикальні площини (COLLIDER) */
+/** Компонент: Блокування руху крізь вертикальні площини (Анти-лаг) */
 AFRAME.registerComponent('wall-collider', {
   init: function () {
     this.raycaster = new THREE.Raycaster();
     this.colliders = [];
-    this.playerRadius = 0.4; // Запас дистанції (відштовхування від стіни)
-    this.initialized = false;
-    this.lastLocalPos = new THREE.Vector3();
-    this.rigObj = document.querySelector('#rig').object3D;
+    this.playerRadius = 0.4;
+    
+    this.dirs = [
+      new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+      new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
+      new THREE.Vector3(0.707, 0, 0.707), new THREE.Vector3(-0.707, 0, 0.707),
+      new THREE.Vector3(0.707, 0, -0.707), new THREE.Vector3(-0.707, 0, -0.707)
+    ];
   },
   tick: function () {
     if (this.colliders.length === 0) return;
 
-    const localPos = this.el.object3D.position;
-
-    // Ініціалізація початкової безпечної точки
-    if (!this.initialized) {
-      this.lastLocalPos.copy(localPos);
-      this.initialized = true;
-      return;
-    }
-
-    // Розрахунок спроби кроку
-    const delta = new THREE.Vector3().subVectors(localPos, this.lastLocalPos);
-    delta.y = 0; // Ігноруємо зміни висоти (стрибки)
-
-    if (delta.length() < 0.001) {
-      this.lastLocalPos.copy(localPos);
-      return;
-    }
-
-    // Примусово оновлюємо матриці простору для точності
     this.el.object3D.updateMatrixWorld(true);
-    this.rigObj.updateMatrixWorld(true);
+    const worldPos = new THREE.Vector3();
+    this.el.object3D.getWorldPosition(worldPos);
+    worldPos.y -= 0.5; 
 
-    // Безпечний перевід локальних координат у світові через математичну матрицю батька (#rig)
-    const startWorldPos = this.lastLocalPos.clone();
-    startWorldPos.applyMatrix4(this.rigObj.matrixWorld);
-    startWorldPos.y -= 0.5; // Опускаємо промінь на рівень грудей
+    const rigObj = document.querySelector('#rig').object3D;
 
-    const endWorldPos = localPos.clone();
-    endWorldPos.applyMatrix4(this.rigObj.matrixWorld);
-    endWorldPos.y -= 0.5;
+    for (let i = 0; i < this.dirs.length; i++) {
+      this.raycaster.set(worldPos, this.dirs[i]);
+      const hits = this.raycaster.intersectObjects(this.colliders, true);
+      
+      if (hits.length > 0 && hits[0].distance < this.playerRadius) {
+        const overlap = this.playerRadius - hits[0].distance;
+        const pushVec = this.dirs[i].clone().multiplyScalar(-overlap);
+        
+        const invQuat = rigObj.quaternion.clone().invert();
+        const localPush = pushVec.clone().applyQuaternion(invQuat);
 
-    // Світовий вектор руху
-    const worldDelta = new THREE.Vector3().subVectors(endWorldPos, startWorldPos);
-    worldDelta.y = 0;
-    
-    const distance = worldDelta.length();
-    const direction = worldDelta.normalize();
-
-    // Запуск променя
-    this.raycaster.set(startWorldPos, direction);
-    const hits = this.raycaster.intersectObjects(this.colliders, true);
-
-    // Якщо відстань до стіни менша за (довжина кроку + радіус тіла) — блокуємо
-    if (hits.length > 0 && hits[0].distance < (distance + this.playerRadius)) {
-      localPos.copy(this.lastLocalPos); // Відкидаємо камеру назад
-    } else {
-      this.lastLocalPos.copy(localPos); // Крок легальний, зберігаємо позицію
+        this.el.object3D.position.add(localPush);
+        worldPos.add(pushVec); 
+      }
     }
   }
 });
 
-/** Компонент: Автоматичне приховування курсора із мертвою зоною (deadzone) */
+/** Компонент: Автоматичне приховування курсора */
 AFRAME.registerComponent('auto-hide-cursor', {
   schema: {
-    timeout: { type: 'number', default: 1000 }, // Час до зникнення (мс)
-    deadzone: { type: 'number', default: 15 }   // Безпечний діапазон руху (пікселі)
+    timeout: { type: 'number', default: 1000 },
+    deadzone: { type: 'number', default: 15 }   
   },
   init: function () {
     this.timer = null;
     this.isVisible = true;
     this.baseOpacity = this.el.getAttribute('material').opacity || 0.6;
-
-    // Змінні для запам'ятовування координат миші в стані спокою
     this.lastX = null;
     this.lastY = null;
 
@@ -97,34 +73,24 @@ AFRAME.registerComponent('auto-hide-cursor', {
   },
   onMouseMove: function (e) {
     if (!this.isVisible) {
-      // Якщо курсор прихований, фіксуємо стартову точку для розрахунку мертвої зони
       if (this.lastX === null || this.lastY === null) {
         this.lastX = e.clientX;
         this.lastY = e.clientY;
         return;
       }
-
-      // Рахуємо фактичну дистанцію руху курсора екраном
       const dx = e.clientX - this.lastX;
       const dy = e.clientY - this.lastY;
       const distance = Math.sqrt(dx * dx + dy * dy);
-
-      // Пробуджуємо приціл тільки якщо миша вийшла за межі мертвої зони
-      if (distance > this.data.deadzone) {
-        this.showCursor();
-      }
+      if (distance > this.data.deadzone) this.showCursor();
     } else {
-      // Якщо курсор видимий, будь-який рух скидає таймер
       this.resetTimer();
     }
   },
   showCursor: function () {
     if (!this.isVisible) {
-      this.el.setAttribute('visible', true); // Фізично повертаємо об'єкт у сцену
+      this.el.setAttribute('visible', true); 
       this.el.setAttribute('animation', `property: material.opacity; from: 0; to: ${this.baseOpacity}; dur: 150; easing: easeOutQuad`);
       this.isVisible = true;
-      
-      // Скидаємо координати спокою
       this.lastX = null;
       this.lastY = null;
     }
@@ -134,25 +100,12 @@ AFRAME.registerComponent('auto-hide-cursor', {
     if (this.isVisible) {
       this.el.setAttribute('animation', 'property: material.opacity; to: 0; dur: 300; easing: easeOutQuad');
       this.isVisible = false;
-
-      // Чекаємо завершення анімації (300мс) і фізично вимикаємо рендеринг об'єкта
-      setTimeout(() => {
-        if (!this.isVisible) {
-          this.el.setAttribute('visible', false);
-        }
-      }, 300);
+      setTimeout(() => { if (!this.isVisible) this.el.setAttribute('visible', false); }, 300);
     }
   },
   resetTimer: function () {
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(this.hideCursor, this.data.timeout);
-  },
-  remove: function () {
-    window.removeEventListener('mousemove', this.onMouseMove);
-    window.removeEventListener('keydown', this.showCursor);
-    window.removeEventListener('mousedown', this.showCursor);
-    window.removeEventListener('wheel', this.showCursor);
-    if (this.timer) clearTimeout(this.timer);
   }
 });
 
@@ -180,41 +133,27 @@ const ui = {
       this.image.src = "";
       this.image.style.display = "none";
     }
-
-    // ЗМІНЕНО: тепер використовуємо flex замість block
     this.panel.style.display = "flex";
-
-    // Блокування керування камерою та звільнення курсора
     if (this.cameraEl) {
       this.cameraEl.setAttribute("look-controls", "enabled", false);
       this.cameraEl.setAttribute("wasd-controls", "enabled", false);
     }
-    if (document.pointerLockElement) {
-      document.exitPointerLock();
-    }
+    if (document.pointerLockElement) document.exitPointerLock();
   },
   
   close() {
     this.panel.style.display = "none";
     this.image.src = ""; 
     this.image.style.display = "none";
-
-    // Відновлення керування камерою
     if (this.cameraEl) {
       this.cameraEl.setAttribute("look-controls", "enabled", true);
       this.cameraEl.setAttribute("wasd-controls", "enabled", true);
     }
-
-    // Примусове та автоматичне повернення курсора в сцену
     const sceneCanvas = document.querySelector("a-scene").canvas;
-    if (sceneCanvas) {
-      sceneCanvas.requestPointerLock();
-    }
+    if (sceneCanvas) sceneCanvas.requestPointerLock();
   }
 };
 
-
-/** UI логіка підказки (Hint) */
 const hintBox = {
   el: $("#hint"),
   full: $("#hint-full"),
@@ -229,43 +168,206 @@ const hintBox = {
     } else {
       this.full.style.display = "block";
       this.collapsed.style.display = "none";
-      this.startTimer(); // Перезапуск таймера після ручного відкриття
+      this.startTimer(); 
     }
   },
   startTimer() {
     if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => {
-      if (!this.isCollapsed) this.toggle();
-    }, 10000); // 10000 мілісекунд = 10 секунд
+    this.timer = setTimeout(() => { if (!this.isCollapsed) this.toggle(); }, 10000); 
   },
   init() {
-    if (!this.el || !this.full || !this.collapsed) return;
-    // Блокуємо спливання події кліку, щоб не активувати інші елементи
-    this.el.addEventListener("mousedown", (e) => e.stopPropagation());
-    this.el.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.toggle();
-    });
+    if (!this.el) return;
+    this.el.addEventListener("click", (e) => { e.stopPropagation(); this.toggle(); });
     this.startTimer();
   }
 };
 hintBox.init();
 
-// Обробник кліку правою кнопкою миші (працює навіть при заблокованому курсорі)
+window.addEventListener("contextmenu", (e) => e.preventDefault());
 window.addEventListener("mousedown", (e) => {
-  if (e.button === 2) { // 2 — це системний код правої кнопки миші
-    ui.close();
-  }
+  if (e.button === 2 && ui.panel.style.display === "flex") ui.close();
 });
 
-// Окремо блокуємо появу системного контекстного меню браузера
-window.addEventListener("contextmenu", (e) => {
-  e.preventDefault();
-});
+/** =========================================================
+    ЛОГІКА ПЛАНУВАЛЬНИКА МАРШРУТУ (2D ПЛАН)
+    ========================================================= */
+const pathPlanner = {
+  overlay: $("#pathModalOverlay"),
+  pointsContainer: $("#planPoints"),
+  linesContainer: $("#planLines"),
+  startBtn: $("#startTourBtn"),
+  resetBtn: $("#resetTourBtn"),
+  
+  cols: 6,
+  rows: 5,
+  currentPathEnd: null, 
+  spawnPointHook: null,
+  activeSegments: new Set(),
+  drawnLines: new Map(), 
+  blacklistedSegments: new Set(),
+  blacklistedPoints: new Set(),
+  sceneRoot: null, 
+
+  mapping: {
+    "c1_r1-2": "PATH_VER_01", "c1_r2-3": "PATH_VER_02", "c2_r1-2": "PATH_VER_03", "c2_r2-3": "PATH_VER_04",
+    "c3_r1-2": "PATH_VER_05", "c3_r2-3": "PATH_VER_06", "c4_r1-2": "PATH_VER_07", "c4_r2-3": "PATH_VER_08",
+    "r1_c1-2": "PATH_HOR_01", "r1_c2-3": "PATH_HOR_02", "r1_c3-4": "PATH_HOR_03",
+    "r2_c1-2": "PATH_HOR_04", "r2_c2-3": "PATH_HOR_05", "r2_c3-4": "PATH_HOR_06",
+    "r3_c1-2": "PATH_HOR_07", "r3_c2-3": "PATH_HOR_08", "r3_c3-4": "PATH_HOR_09"
+  },
+
+  pointToHook: {
+    "c1_r1": "POINT_01", "c2_r1": "POINT_02", "c3_r1": "POINT_03", "c4_r1": "POINT_04",
+    "c1_r2": "POINT_05", "c2_r2": "POINT_06", "c3_r2": "POINT_07", "c4_r2": "POINT_08",
+    "c1_r3": "POINT_09", "c2_r3": "POINT_10", "c3_r3": "POINT_11", "c4_r3": "POINT_12"
+  },
+
+  init(cfg) {
+    const cam = $("#camera");
+    if (cam) {
+      cam.setAttribute("look-controls", "enabled", false);
+      cam.setAttribute("wasd-controls", "enabled", false);
+    }
+
+    if (cfg?.PLAN_GRID?.COLS) this.cols = cfg.PLAN_GRID.COLS;
+    if (cfg?.PLAN_GRID?.ROWS) this.rows = cfg.PLAN_GRID.ROWS;
+
+    if (cfg && Array.isArray(cfg.BLACKLISTED_PATHS)) {
+      cfg.BLACKLISTED_PATHS.forEach(segment => this.blacklistedSegments.add(segment));
+    }
+    if (cfg?.PLAN_GRID && Array.isArray(cfg.PLAN_GRID.BLACKLISTED_POINTS)) {
+      cfg.PLAN_GRID.BLACKLISTED_POINTS.forEach(pt => this.blacklistedPoints.add(pt));
+    }
+
+    this.buildGrid(cfg);
+    this.resetBtn.addEventListener("click", () => this.resetRoute());
+
+    this.startBtn.addEventListener("click", () => {
+      this.overlay.style.display = "none";
+      this.load3DPaths();
+      
+      if (this.spawnPointHook && this.sceneRoot) {
+        const hookObj = getByName(this.sceneRoot, this.spawnPointHook);
+        if (hookObj) {
+          const wp = new THREE.Vector3();
+          hookObj.getWorldPosition(wp);
+          const rig = $("#rig");
+          rig.setAttribute("position", `${wp.x} ${wp.y} ${wp.z}`);
+          
+          const pointRot = cfg?.POINT_ROTATIONS?.[this.spawnPointHook] || cfg?.PLAYER?.START_ROTATION || [0, 0, 0];
+          rig.setAttribute("rotation", `${pointRot[0]} ${pointRot[1]} ${pointRot[2]}`);
+        }
+      }
+
+      if (cam) {
+        cam.setAttribute("look-controls", "enabled", true);
+        cam.setAttribute("wasd-controls", "enabled", true);
+      }
+    });
+  },
+
+  resetRoute() {
+    this.activeSegments.clear();
+    this.drawnLines.forEach(line => line.remove());
+    this.drawnLines.clear();
+    const selectedPoints = document.querySelectorAll('.point-selected');
+    selectedPoints.forEach(pt => pt.classList.remove('point-selected'));
+    this.currentPathEnd = null;
+    this.spawnPointHook = null;
+  },
+
+  buildGrid(cfg) {
+    const colsX = cfg?.PLAN_GRID?.COLUMNS_X;
+    const rowsY = cfg?.PLAN_GRID?.ROWS_Y;
+    if (!Array.isArray(colsX) || colsX.length !== this.cols || !Array.isArray(rowsY) || rowsY.length !== this.rows) {
+      console.error("[CONFIG ERROR] Невідповідність параметрів PLAN_GRID.");
+      return;
+    }
+
+    for (let r = 0; r < this.rows; r++) {
+      for (let c = 0; c < this.cols; c++) {
+        const ptID = `c${c}_r${r}`;
+        if (this.blacklistedPoints.has(ptID)) continue;
+
+        const pt = document.createElement("div");
+        pt.className = "plan-point";
+        pt.style.left = `${colsX[c]}%`;
+        pt.style.top = `${rowsY[r]}%`;
+
+        const isEdge = (c === 0 || c === this.cols - 1 || r === 0 || r === this.rows - 1);
+        if (isEdge) {
+          pt.classList.add("point-edge");
+        } else {
+          pt.classList.add("point-inner");
+          pt.dataset.c = c; pt.dataset.r = r;
+          pt.addEventListener("click", (e) => this.handlePointClick(e.target, c, r));
+        }
+        this.pointsContainer.appendChild(pt);
+      }
+    }
+  },
+
+  handlePointClick(el, c, r) {
+    if (!this.currentPathEnd) {
+      this.currentPathEnd = { el, c, r };
+      this.spawnPointHook = this.pointToHook[`c${c}_r${r}`];
+      el.classList.add("point-selected");
+      return;
+    }
+    const p1 = this.currentPathEnd;
+    const p2 = { el, c, r };
+    let segmentKey = null;
+    if (p1.c === p2.c && Math.abs(p1.r - p2.r) === 1) {
+      const minR = Math.min(p1.r, p2.r);
+      const maxR = Math.max(p1.r, p2.r);
+      segmentKey = `c${p1.c}_r${minR}-${maxR}`;
+    } else if (p1.r === p2.r && Math.abs(p1.c - p2.c) === 1) {
+      const minC = Math.min(p1.c, p2.c);
+      const maxC = Math.max(p1.c, p2.c);
+      segmentKey = `r${p1.r}_c${minC}-${maxC}`;
+    }
+    if (segmentKey && this.mapping[segmentKey]) {
+      if (this.blacklistedSegments.has(segmentKey)) return; 
+      if (this.activeSegments.has(segmentKey)) {
+        this.activeSegments.delete(segmentKey);
+        const lineObj = this.drawnLines.get(segmentKey);
+        if (lineObj) { lineObj.remove(); this.drawnLines.delete(segmentKey); }
+      } else {
+        this.activeSegments.add(segmentKey);
+        this.drawSVGFast(p1, p2, segmentKey);
+      }
+      p1.el.classList.remove("point-selected");
+      this.currentPathEnd = p2;
+      p2.el.classList.add("point-selected");
+    }
+  },
+
+  drawSVGFast(p1, p2, segmentKey) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', p1.el.style.left); line.setAttribute('y1', p1.el.style.top);
+    line.setAttribute('x2', p2.el.style.left); line.setAttribute('y2', p2.el.style.top);
+    line.setAttribute('stroke', '#ff3b3b'); line.setAttribute('stroke-width', '4');
+    this.linesContainer.appendChild(line);
+    this.drawnLines.set(segmentKey, line);
+  },
+
+  load3DPaths() {
+    if (!this.sceneRoot) return;
+    this.activeSegments.forEach(segmentKey => {
+      const objName = this.mapping[segmentKey];
+      if (objName) {
+        const pathObj = getByName(this.sceneRoot, objName);
+        if (pathObj) pathObj.visible = true;
+      }
+    });
+  }
+};
+
+/** ========================================================= */
 
 async function loadConfig() {
   const res = await fetch(CONFIG_PATH, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Не вдалося завантажити config. Статус: ${res.status}`);
+  if (!res.ok) throw new Error(`Status: ${res.status}`);
   return await res.json();
 }
 
@@ -286,7 +388,7 @@ function loadImageInfo(url) {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    img.onerror = () => reject(new Error(`Зображення не знайдено: ${url}`));
+    img.onerror = () => reject(new Error(url));
     img.src = url;
   });
 }
@@ -298,9 +400,7 @@ function computeContainSize(innerW, innerH, imgW, imgH) {
   return { w: innerH * imgAspect, h: innerH };
 }
 
-function getByName(root3D, name) {
-  return root3D.getObjectByName(name);
-}
+function getByName(root3D, name) { return root3D.getObjectByName(name); }
 
 function ensureUniqueMaterial(mesh) {
   if (!mesh || !mesh.material) return;
@@ -313,30 +413,22 @@ async function applyMaterialOverride(mesh, override) {
   ensureUniqueMaterial(mesh);
   const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
   const colorHex = override.COLOR || null;
-  const metalness = override.METALNESS;
-  const roughness = override.ROUGHNESS;
   const mapPath = override.TEXTURE || null;
   const targetIndex = typeof override.MATERIAL_INDEX === "number" ? override.MATERIAL_INDEX : null;
-
   for (let i = 0; i < mats.length; i++) {
     if (targetIndex !== null && i !== targetIndex) continue;
     const m = mats[i];
     if (colorHex && m.color) m.color.set(colorHex);
-    if (typeof metalness === "number" && "metalness" in m) m.metalness = metalness;
-    if (typeof roughness === "number" && "roughness" in m) m.roughness = roughness;
-
+    if (typeof override.METALNESS === "number" && "metalness" in m) m.metalness = override.METALNESS;
+    if (typeof override.ROUGHNESS === "number" && "roughness" in m) m.roughness = override.ROUGHNESS;
     if (mapPath) {
-      const tex = await new Promise((resolve, reject) => {
-        new THREE.TextureLoader().load(mapPath, resolve, undefined, reject);
-      });
+      const tex = await new Promise((res, rej) => new THREE.TextureLoader().load(mapPath, res, undefined, rej));
       tex.colorSpace = THREE.SRGBColorSpace;
-      if (override.REPEAT && Array.isArray(override.REPEAT) && override.REPEAT.length === 2) {
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
+      if (override.REPEAT) {
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
         tex.repeat.set(override.REPEAT[0], override.REPEAT[1]);
       }
-      m.map = tex;
-      m.needsUpdate = true;
+      m.map = tex; m.needsUpdate = true;
     }
   }
 }
@@ -345,22 +437,12 @@ function buildLightsFromConfig(cfg) {
   const lightsRoot = $("#lights");
   lightsRoot.innerHTML = "";
   const arr = cfg?.LIGHTS?.LIST;
-  if (!Array.isArray(arr) || arr.length === 0) return;
-
+  if (!Array.isArray(arr)) return;
   arr.forEach((L) => {
     const e = document.createElement("a-entity");
     const type = (L.TYPE || "point").toLowerCase();
-    const color = L.COLOR || "#ffffff";
-    const intensity = typeof L.INTENSITY === "number" ? L.INTENSITY : 1.0;
-    const distance = typeof L.DISTANCE === "number" ? L.DISTANCE : 0.0;
-    const decay = typeof L.DECAY === "number" ? L.DECAY : 2.0;
-    const angle = typeof L.ANGLE === "number" ? L.ANGLE : 45;
-    const penumbra = typeof L.PENUMBRA === "number" ? L.PENUMBRA : 0.2;
-
-    let lightStr = `type: ${type}; color: ${color}; intensity: ${intensity};`;
-    if (type === "point" || type === "spot") lightStr += ` distance: ${distance}; decay: ${decay};`;
-    if (type === "spot") lightStr += ` angle: ${THREE.MathUtils.degToRad(angle)}; penumbra: ${penumbra};`;
-
+    let lightStr = `type: ${type}; color: ${L.COLOR || "#ffffff"}; intensity: ${L.INTENSITY || 1};`;
+    if (type === "point" || type === "spot") lightStr += ` distance: ${L.DISTANCE || 0}; decay: ${L.DECAY || 2};`;
     e.setAttribute("light", lightStr);
     const p = L.POSITION || [0, 3, 0];
     const r = L.ROTATION || [0, 0, 0];
@@ -373,32 +455,24 @@ function buildLightsFromConfig(cfg) {
 function loadRoom(cfg) {
   const room = $("#room");
   const glbPath = cfg?.ROOM?.GLB_PATH || "./assets/room.glb";
-  const pos = cfg?.ROOM?.POSITION || [0,0,0];
-  const rot = cfg?.ROOM?.ROTATION || [0,0,0];
-  const scale = cfg?.ROOM?.SCALE ?? 1;
-
+  const p = cfg?.ROOM?.POSITION || [0,0,0];
+  const r = cfg?.ROOM?.ROTATION || [0,0,0];
   room.setAttribute("gltf-model", `url(${glbPath})`);
-  room.setAttribute("position", `${pos[0]} ${pos[1]} ${pos[2]}`);
-  room.setAttribute("rotation", `${rot[0]} ${rot[1]} ${rot[2]}`);
-  room.setAttribute("scale", `${scale} ${scale} ${scale}`);
+  room.setAttribute("position", `${p[0]} ${p[1]} ${p[2]}`);
+  room.setAttribute("rotation", `${r[0]} ${r[1]} ${r[2]}`);
+  room.setAttribute("scale", `${cfg?.ROOM?.SCALE ?? 1} ${cfg?.ROOM?.SCALE ?? 1} ${cfg?.ROOM?.SCALE ?? 1}`);
   return room;
 }
 
 async function applyMaterialOverrides(root3D, cfg) {
   const list = cfg?.MATERIAL_OVERRIDES;
-  if (!Array.isArray(list) || list.length === 0) return;
-
+  if (!Array.isArray(list)) return;
   root3D.traverse(async (obj) => {
     if (!obj.isMesh || !obj.material) return;
     const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
     for (const ov of list) {
       const targetName = ov.MATERIAL_NAME;
       if (!targetName) continue;
-      if (typeof ov.MATERIAL_INDEX === "number") {
-        const idx = ov.MATERIAL_INDEX;
-        if (mats[idx] && mats[idx].name === targetName) await applyMaterialOverride(obj, ov);
-        continue;
-      }
       if (mats.some(m => m?.name === targetName)) await applyMaterialOverride(obj, ov);
     }
   });
@@ -407,90 +481,64 @@ async function applyMaterialOverrides(root3D, cfg) {
 async function buildWorks(root3D, cfg) {
   const slots = cfg?.SLOTS;
   const works = cfg?.WORKS;
-  if (!Array.isArray(slots) || slots.length === 0) return;
-  if (!Array.isArray(works) || works.length === 0) return;
-
+  if (!Array.isArray(slots) || !Array.isArray(works)) return;
   const slotById = new Map(slots.map(s => [s.SLOT_ID, s]));
-  
-  // Глобальный параметр свечения (если нужен для всех картин сразу)
-  const globalGlow = typeof cfg?.WORKS_GLOW === "number" ? cfg.WORKS_GLOW : 0.0;
+  const globalGlow = cfg?.WORKS_GLOW ?? 0;
 
   for (let i = 0; i < works.length; i++) {
     const work = works[i];
-    const slotId = work.SLOT_ID || slots[i]?.SLOT_ID;
-    if (!slotId) continue;
-
-    const slot = slotById.get(slotId);
+    const slot = slotById.get(work.SLOT_ID || slots[i]?.SLOT_ID);
     if (!slot) continue;
-
-    const hookName = slot.HOOK_NAME;
-    const hookObj = getByName(root3D, hookName);
+    const hookObj = getByName(root3D, slot.HOOK_NAME);
     if (!hookObj) continue;
-
     const imgUrl = `./works/${work.FILE}`;
     let imgInfo = null;
     try { imgInfo = await loadImageInfo(imgUrl); } catch (e) { continue; }
-
-    const innerW = Number(slot.INNER_W || 1.0);
-    const innerH = Number(slot.INNER_H || 1.0);
-    const size = computeContainSize(innerW, innerH, imgInfo.width, imgInfo.height);
-
+    const size = computeContainSize(slot.INNER_W || 1, slot.INNER_H || 1, imgInfo.width, imgInfo.height);
     const plane = document.createElement("a-plane");
     plane.classList.add("clickable");
-    plane.setAttribute("width", size.w);
-    plane.setAttribute("height", size.h);
-    plane.setAttribute("material", `src: url(${imgUrl}); shader: standard; transparent: true; metalness: 0.0; roughness: 1.0;`);
-    plane.setAttribute("geometry", "primitive: plane");
-
-    // --- НОВЫЙ БЛОК: СВЕЧЕНИЕ КАРТИН (GLOW) ---
-    // Проверяем, есть ли персональное свечение у картины, если нет - берем глобальное
-    const workGlow = typeof work.GLOW === "number" ? work.GLOW : globalGlow;
+    plane.setAttribute("width", size.w); plane.setAttribute("height", size.h);
+    plane.setAttribute("material", `src: url(${imgUrl}); shader: standard; transparent: true; metalness: 0; roughness: 1;`);
     
-    if (workGlow > 0) {
+    if ((work.GLOW ?? globalGlow) > 0) {
       plane.addEventListener('materialtextureloaded', () => {
         const mesh = plane.getObject3D('mesh');
-        if (mesh && mesh.material && mesh.material.map) {
-          // Делаем саму картинку источником свечения
-          mesh.material.emissiveMap = mesh.material.map;
-          mesh.material.emissive.setHex(0xffffff); // Белый свет свечения (не искажает цвета)
-          mesh.material.emissiveIntensity = workGlow; // Яркость
-          mesh.material.needsUpdate = true;
-        }
+        mesh.material.emissiveMap = mesh.material.map;
+        mesh.material.emissive.setHex(0xffffff); 
+        mesh.material.emissiveIntensity = work.GLOW ?? globalGlow; 
+        mesh.material.needsUpdate = true;
       });
     }
-    // -----------------------------------------
 
-    const offset = Number(slot.IMAGE_OFFSET || 0.01);
-    const wp = new THREE.Vector3();
-    const wq = new THREE.Quaternion();
-    hookObj.getWorldPosition(wp);
-    hookObj.getWorldQuaternion(wq);
-
+    const wp = new THREE.Vector3(); const wq = new THREE.Quaternion();
+    hookObj.getWorldPosition(wp); hookObj.getWorldQuaternion(wq);
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(wq);
-    const finalPos = wp.clone().add(forward.multiplyScalar(offset));
+    const finalPos = wp.clone().add(forward.multiplyScalar(slot.IMAGE_OFFSET || 0.01));
     plane.setAttribute("position", `${finalPos.x} ${finalPos.y} ${finalPos.z}`);
-
     const euler = new THREE.Euler().setFromQuaternion(wq, "YXZ");
     plane.setAttribute("rotation", `${THREE.MathUtils.radToDeg(euler.x)} ${THREE.MathUtils.radToDeg(euler.y)} ${THREE.MathUtils.radToDeg(euler.z)}`);
-
-    // Роздільна обробка кнопок миші виключно при наведенні на картину
     plane.addEventListener("mousedown", (e) => {
-      // ЗАХИСТ: Перевіряємо, чи браузер вже захопив курсор для керування
-      // Якщо pointerLockElement відсутній, це найперший клік по екрану — ігноруємо його
-      if (!document.pointerLockElement) {
-        return; 
-      }
-
-      const nativeEvent = e.detail.mouseEvent;
-      
-      if (nativeEvent && nativeEvent.button === 2) {
-        ui.close();
-      } else {
-        ui.open(work);
-      }
+      if (document.pointerLockElement) ui.open(work);
     });
-
     $("a-scene").appendChild(plane);
+  }
+}
+
+async function buildSculptures(root3D, cfg) {
+  const arr = cfg?.SCULPTURES;
+  if (!Array.isArray(arr)) return;
+  for (const scl of arr) {
+    const hookObj = getByName(root3D, scl.HOOK_NAME);
+    if (!hookObj) continue;
+    const e = document.createElement("a-entity");
+    e.setAttribute("gltf-model", `url(./assets/${scl.FILE})`);
+    const wp = new THREE.Vector3(); const wq = new THREE.Quaternion();
+    hookObj.getWorldPosition(wp); hookObj.getWorldQuaternion(wq);
+    e.setAttribute("position", `${wp.x} ${wp.y} ${wp.z}`);
+    const euler = new THREE.Euler().setFromQuaternion(wq, "YXZ");
+    e.setAttribute("rotation", `${THREE.MathUtils.radToDeg(euler.x)} ${THREE.MathUtils.radToDeg(euler.y)} ${THREE.MathUtils.radToDeg(euler.z)}`);
+    e.setAttribute("scale", `${scl.SCALE || 1} ${scl.SCALE || 1} ${scl.SCALE || 1}`);
+    $("a-scene").appendChild(e);
   }
 }
 
@@ -514,102 +562,39 @@ function setupEnvironment(cfg) {
     if ("environmentIntensity" in sceneEl.object3D) sceneEl.object3D.environmentIntensity = intensity;
   });
 }
-/** Завантаження та розстановка додаткових 3D-моделей (скульптур) по координатах пустышок */
-async function buildSculptures(root3D, cfg) {
-  const sculptures = cfg?.SCULPTURES;
-  if (!Array.isArray(sculptures) || sculptures.length === 0) return;
 
-  const sceneEl = $("a-scene");
-
-  for (const scl of sculptures) {
-    const hookName = scl.HOOK_NAME;
-    const hookObj = getByName(root3D, hookName);
-    
-    // Якщо пустышка не знайдена в room.glb, пропускаємо
-    if (!hookObj) {
-      console.warn(`[SCULPTURES] Пустишка ${hookName} не знайдена в інтер'єрі.`);
-      continue;
-    }
-
-    const glbPath = `./assets/${scl.FILE}`;
-
-    // Створюємо новий об'єкт
-    const sclEntity = document.createElement("a-entity");
-    sclEntity.setAttribute("gltf-model", `url(${glbPath})`);
-
-    // Зчитуємо світові координати та обертання пустышки
-    const wp = new THREE.Vector3();
-    const wq = new THREE.Quaternion();
-    hookObj.getWorldPosition(wp);
-    hookObj.getWorldQuaternion(wq);
-
-    // Застосовуємо позицію
-    sclEntity.setAttribute("position", `${wp.x} ${wp.y} ${wp.z}`);
-
-    // Застосовуємо обертання
-    const euler = new THREE.Euler().setFromQuaternion(wq, "YXZ");
-    sclEntity.setAttribute("rotation", `${THREE.MathUtils.radToDeg(euler.x)} ${THREE.MathUtils.radToDeg(euler.y)} ${THREE.MathUtils.radToDeg(euler.z)}`);
-
-    // Застосовуємо масштаб, якщо він вказаний
-    const scale = scl.SCALE || 1;
-    sclEntity.setAttribute("scale", `${scale} ${scale} ${scale}`);
-
-    sceneEl.appendChild(sclEntity);
-  }
-}
 (async function main() {
   try {
     const cfg = await loadConfig();
     warnIfNotUppercaseKeys(cfg);
     basicComplianceChecks(cfg);
-
+    
+    pathPlanner.init(cfg);
     setupEnvironment(cfg);
     buildLightsFromConfig(cfg);
-
-    const cam = $("#camera");
-    const rig = $("#rig");
-    const playerH = cfg?.PLAYER?.HEIGHT ?? 1.65;
+    
+    const cam = $("#camera"); const rig = $("#rig");
+    cam.setAttribute("position", `0 ${cfg?.PLAYER?.HEIGHT ?? 1.65} 0`);
+    cam.setAttribute("camera", "fov", cfg?.PLAYER?.FOV ?? 80);
     const start = cfg?.PLAYER?.START_POSITION || [0, 0, 0];
-    
-    // Вилучення параметрів FOV та стартового обертання
-    const playerFov = cfg?.PLAYER?.FOV ?? 80;
-    const startRot = cfg?.PLAYER?.START_ROTATION || [0, 0, 0];
-    
-    // Впровадження позицій, кута обзора та обертання
-    cam.setAttribute("position", `0 ${playerH} 0`);
-    cam.setAttribute("camera", "fov", playerFov);
-    
+    const rot = cfg?.PLAYER?.START_ROTATION || [0, 0, 0];
     rig.setAttribute("position", `${start[0]} ${start[1]} ${start[2]}`);
-    rig.setAttribute("rotation", `${startRot[0]} ${startRot[1]} ${startRot[2]}`);
-
+    rig.setAttribute("rotation", `${rot[0]} ${rot[1]} ${rot[2]}`);
+    
     const room = loadRoom(cfg);
-
     room.addEventListener("model-loaded", async () => {
-      const root3D = room.getObject3D("mesh");
-      if (!root3D) return;
-
-      // 4.0) Збір вертикальних об'єктів-коллайдерів
-      const colliderSystem = cam.components['wall-collider'];
-      
+      const root3D = room.getObject3D("mesh"); if (!root3D) return;
+      pathPlanner.sceneRoot = root3D;
+      const collSystem = cam.components['wall-collider'];
       root3D.traverse(child => {
-        if (child.name && child.name.toUpperCase().includes("COLLIDER")) {
-          child.visible = false; // Робимо стіни невидимими для глядача, але відчутними для променя
-          if (colliderSystem) colliderSystem.colliders.push(child);
-        }
+        if (!child.name) return;
+        const nameU = child.name.toUpperCase();
+        if (nameU.includes("COLLIDER")) { child.visible = false; if (collSystem) collSystem.colliders.push(child); }
+        if (nameU.includes("PATH_HOR_") || nameU.includes("PATH_VER_")) child.visible = false;
       });
-
-      if (colliderSystem && colliderSystem.colliders.length === 0) {
-        console.warn("[COLLIDER] Об'єкти з назвою 'COLLIDER' не знайдені. Рух не обмежено.");
-      }
-
       await applyMaterialOverrides(root3D, cfg);
       await buildWorks(root3D, cfg);
-      await buildSculptures(root3D, cfg); // Виклик нової функції
-
-      console.log("✅ Шаблон портфоліо готовий (вертикальні стіни активні)");
+      await buildSculptures(root3D, cfg);
     });
-
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) { console.error(e); }
 })();
