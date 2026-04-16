@@ -12,6 +12,28 @@
     "START_ROTATION": [0, -90, 0],
     "FOV": 80
   },
+  "PLAN_GRID": {
+    "COLS": 6,
+    "ROWS": 5,
+    "COLUMNS_X": [0, 15, 40, 63, 85, 100],
+    "ROWS_Y": [0, 20, 50, 80, 100],
+    "BLACKLISTED_POINTS": ["c2_r2"]
+  },
+  "POINT_ROTATIONS": {
+    "POINT_01": [0, 90, 0],
+    "POINT_02": [0, 180, 0],
+    "POINT_03": [0, 180, 0],
+    "POINT_09": [0, 90, 0],
+    "POINT_10": [0, 0, 0],
+    "POINT_11": [0, 0, 0]
+  },
+  "BLACKLISTED_PATHS": [
+    "r2_c1-2",
+    "r2_c2-3",
+    "r2_c3-4",
+    "c2_r1-2",
+    "c2_r2-3"
+  ],
   "ENVIRONMENT": {
     "MAP_PATH": "./assets/env.jpg",
     "INTENSITY": 0.7
@@ -632,66 +654,6 @@
     {
       "HOOK_NAME": "HOOK_SCL_09",
       "FILE": "sculpture_09.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_10",
-      "FILE": "sculpture_10.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_11",
-      "FILE": "sculpture_11.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_12",
-      "FILE": "sculpture_12.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_13",
-      "FILE": "sculpture_13.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_14",
-      "FILE": "sculpture_14.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_15",
-      "FILE": "sculpture_15.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_16",
-      "FILE": "sculpture_16.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_17",
-      "FILE": "sculpture_17.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_18",
-      "FILE": "sculpture_18.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_19",
-      "FILE": "sculpture_19.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_20",
-      "FILE": "sculpture_20.glb",
-      "SCALE": 1.0
-    },
-    {
-      "HOOK_NAME": "HOOK_SCL_21",
-      "FILE": "sculpture_21.glb",
       "SCALE": 1.0
     }
   ]
