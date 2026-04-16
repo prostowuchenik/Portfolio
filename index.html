@@ -9,13 +9,14 @@
 
     <style>
       html, body { margin:0; height:100%; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+      
       /* Темна панель опису по центру екрана */
       #infoPanel {
         position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: min(1500px, calc(100vw - 32px)); /* Ширину збільшено до 900px для горизонтальних робіт */
+        width: min(1200px, calc(100vw - 32px)); 
         max-height: calc(100vh - 48px); 
         background: rgba(18, 18, 18, 0.86);
         color: #fff;
@@ -32,7 +33,7 @@
       /* Стилі для зображення */
       #infoPanel img {
         width: 100%;
-        height: auto; /* Забезпечує коректний розрахунок пропорцій */
+        height: auto; 
         max-height: calc(100vh - 280px); 
         object-fit: contain;
         border-radius: 8px;
@@ -41,15 +42,14 @@
         flex-shrink: 0; 
       }
 
-      /* --- НОВИЙ БЛОК: Текст та темний скроллбар --- */
+      /* Текст та темний скроллбар */
       #infoTextContainer {
-        overflow-y: auto; /* Скроллбар з'явиться ТІЛЬКИ тут, під картинкою */
-        padding-right: 8px; /* Відступ, щоб скроллбар не налізав на літери */
-        scrollbar-width: thin; /* Для Firefox */
+        overflow-y: auto; 
+        padding-right: 8px; 
+        scrollbar-width: thin; 
         scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
       }
 
-      /* Кастомний темний скроллбар для Chrome/Edge/Safari */
       #infoTextContainer::-webkit-scrollbar {
         width: 6px;
       }
@@ -64,34 +64,25 @@
         background: rgba(255, 255, 255, 0.4);
       }
 
-      /* налаштування розміру тексту */
-      
-      /* 1. Головна назва роботи (напр. "Інтер'єр моєї мрії") */
+      /* === НАЛАШТУВАННЯ РОЗМІРУ ТЕКСТУ === */
       #infoTextContainer h3 { 
         margin: 0 0 8px 0; 
-        font-size: 24px; /* Збільшіть або зменшіть цю цифру (було 22px) */
+        font-size: 24px; 
         line-height: 1.2; 
       }
 
-      /* 2. Інформація про автора та матеріали (напр. "Золотопуп Станіслав · 2025...") */
       #infoTextContainer .meta { 
-        opacity: 1; 
-        font-size: 20px; /* Розмір тексту підзаголовка */
+        opacity: 0.85; 
+        font-size: 20px; 
         margin-bottom: 14px;
       }
 
-      /* 3. Основний довгий текст (напр. "Еко-стиль. Використання...") */
       #infoTextContainer .desc { 
-        font-size: 23px; /* Розмір основного тексту (було 14px) */
-        line-height: 1.5; /* Міжрядковий інтервал для зручності читання */
+        font-size: 23px; 
+        line-height: 1.5; 
         white-space: pre-wrap; 
       }
 
-      #infoPanel .closeRow { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom: 10px; }
-      #infoPanel button {
-        appearance:none; border:0; padding: 6px 10px; border-radius: 10px;
-        background: rgba(255,255,255,0.14); color:#fff; cursor:pointer;
-      }
       #hint {
         position: fixed;
         left: 16px;
@@ -106,14 +97,106 @@
         max-width: min(520px, calc(100vw - 32px));
       }
       #hint code { background: rgba(0,0,0,0.08); padding: 1px 6px; border-radius: 8px; }
+      
       a-scene { height: 100vh; width: 100vw; }
+
+      /* === СТАРТОВЕ МОДАЛЬНЕ ВІКНО МАРШРУТУ === */
+      #pathModalOverlay {
+        position: fixed;
+        top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(10, 10, 10, 0.95);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        color: white;
+      }
+      #pathModalOverlay h2 { margin: 0 0 8px 0; }
+      #pathModalOverlay p { margin: 0 0 20px 0; opacity: 0.8; }
+      
+      #planContainer {
+        position: relative;
+        width: min(900px, 90vw);
+        background: #fff;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      #planContainer img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+      #planLines {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        pointer-events: none;
+      }
+      .plan-point {
+        position: absolute;
+        width: 16px; height: 16px;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        z-index: 2;
+        transition: transform 0.1s, background-color 0.2s;
+      }
+      .point-edge {
+        background-color: rgba(150, 150, 150, 0.4);
+        pointer-events: none;
+      }
+      .point-inner {
+        background-color: #fff;
+        border: 3px solid #333;
+        cursor: pointer;
+      }
+      .point-inner:hover {
+        transform: translate(-50%, -50%) scale(1.3);
+      }
+      .point-selected {
+        background-color: #ff3b3b;
+        border-color: #ff3b3b;
+      }
+      
+      /* Кнопки модального вікна */
+      .modal-buttons {
+        display: flex;
+        gap: 16px;
+        margin-top: 24px;
+      }
+      .modal-btn {
+        padding: 12px 24px;
+        font-size: 16px;
+        font-weight: bold;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      #startTourBtn { background: #fff; color: #000; }
+      #startTourBtn:hover { background: #ddd; }
+      #resetTourBtn { background: #444; color: #fff; border: 1px solid #666; }
+      #resetTourBtn:hover { background: #666; }
     </style>
   </head>
 
   <body>
+    <div id="pathModalOverlay">
+      <p>Натисніть на дві сусідні внутрішні точки, щоб прокласти лінію маршруту. Перша точка — старт.</p>
+      
+      <div id="planContainer">
+        <img src="./assets/01.jpg" alt="План інтер'єру">
+        <svg id="planLines"></svg>
+        <div id="planPoints"></div>
+      </div>
+
+      <div class="modal-buttons">
+        <button id="resetTourBtn" class="modal-btn">Скинути маршрут</button>
+        <button id="startTourBtn" class="modal-btn">Розпочати огляд</button>
+      </div>
+    </div>
+
     <div id="infoPanel" aria-live="polite">
       <img id="infoImage" src="" alt="Artwork">
-      
       <div id="infoTextContainer">
         <h3 id="infoTitle">—</h3>
         <div class="meta" id="infoMeta">—</div>
@@ -127,7 +210,7 @@
         <code>Лівий клік</code> по роботі — опис, <code>правий клік</code> — сховати опис.
       </div>
       <div id="hint-collapsed" style="display: none; font-weight: 600; text-align: center;">
-        ⚙️
+        ⚙️ Налаштування керування
       </div>
     </div>
 
@@ -139,19 +222,19 @@
                   wasd-controls="acceleration: 32"
                   look-controls="pointerLockEnabled: true"
                   wall-collider>
-          /* налаштування прицілу */
           <a-entity cursor="fuse: false"
                     position="0 0 -1"
-                    geometry="primitive: ring; radiusInner: 0.004; radiusOuter: 0.015"
+                    geometry="primitive: ring; radiusInner: 0.003; radiusOuter: 0.015"
                     material="color: white; shader: flat; opacity: 0.6; transparent: true"
                     raycaster="objects: .clickable; far: 20"
                     auto-hide-cursor="timeout: 1000; deadzone: 15">
+          </a-entity>
         </a-camera>
       </a-entity>
 
       <a-entity id="lights"></a-entity>
       <a-entity id="room" position="0 0 0"></a-entity>
-
+      
     </a-scene>
 
     <script type="module" src="./app.js"></script>
