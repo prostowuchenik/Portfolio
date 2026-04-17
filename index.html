@@ -113,7 +113,7 @@
         color: white;
       }
       #pathModalOverlay h2 { margin: 0 0 8px 0; }
-      #pathModalOverlay p { margin: 0 0 20px 0; opacity: 0.8; }
+      #pathModalOverlay p { margin: 0 0 20px 0; opacity: 0.8; text-align: center; font-size: 18px; line-height: 1.5; }
       
       #planContainer {
         position: relative;
@@ -126,11 +126,6 @@
         display: block;
         width: 100%;
         height: auto;
-      }
-      #planLines {
-        position: absolute;
-        top: 0; left: 0; width: 100%; height: 100%;
-        pointer-events: none;
       }
       .plan-point {
         position: absolute;
@@ -156,42 +151,16 @@
         background-color: #ff3b3b;
         border-color: #ff3b3b;
       }
-      
-      /* Кнопки модального вікна */
-      .modal-buttons {
-        display: flex;
-        gap: 16px;
-        margin-top: 24px;
-      }
-      .modal-btn {
-        padding: 12px 24px;
-        font-size: 16px;
-        font-weight: bold;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: background 0.2s;
-      }
-      #startTourBtn { background: #fff; color: #000; }
-      #startTourBtn:hover { background: #ddd; }
-      #resetTourBtn { background: #444; color: #fff; border: 1px solid #666; }
-      #resetTourBtn:hover { background: #666; }
     </style>
   </head>
 
   <body>
     <div id="pathModalOverlay">
-      <p>Натисніть на дві сусідні внутрішні точки, щоб прокласти лінію маршруту. Перша точка — старт.</p>
+      <p>Натисніть на доступну точку один раз для вибору,<br>та вдруге для переміщення на вказану позицію.</p>
       
       <div id="planContainer">
         <img src="./assets/01.jpg" alt="План інтер'єру">
-        <svg id="planLines"></svg>
         <div id="planPoints"></div>
-      </div>
-
-      <div class="modal-buttons">
-        <button id="resetTourBtn" class="modal-btn">Скинути маршрут</button>
-        <button id="startTourBtn" class="modal-btn">Розпочати огляд</button>
       </div>
     </div>
 
@@ -209,8 +178,8 @@
         Керування: <code>W A S D</code> — рух, <code>миша</code> — огляд.<br/>
         <code>Лівий клік</code> по роботі — опис, <code>правий клік</code> — сховати опис.
       </div>
-      <div id="hint-collapsed" style="display: none; font-weight: 600; text-align: center;">
-        ⚙️ Налаштування керування
+      <div id="hint-collapsed" style="display: none; font-weight: 1200; text-align: center;">
+        ⚙️ Як рухатись?
       </div>
     </div>
 
