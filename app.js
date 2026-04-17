@@ -194,27 +194,15 @@ window.addEventListener("mousedown", (e) => {
 const pathPlanner = {
   overlay: $("#pathModalOverlay"),
   pointsContainer: $("#planPoints"),
-  linesContainer: $("#planLines"),
-  startBtn: $("#startTourBtn"),
-  resetBtn: $("#resetTourBtn"),
   
   cols: 6,
   rows: 5,
-  currentPathEnd: null, 
-  spawnPointHook: null,
-  activeSegments: new Set(),
-  drawnLines: new Map(), 
-  blacklistedSegments: new Set(),
   blacklistedPoints: new Set(),
   sceneRoot: null, 
-
-  mapping: {
-    "c1_r1-2": "PATH_VER_01", "c1_r2-3": "PATH_VER_02", "c2_r1-2": "PATH_VER_03", "c2_r2-3": "PATH_VER_04",
-    "c3_r1-2": "PATH_VER_05", "c3_r2-3": "PATH_VER_06", "c4_r1-2": "PATH_VER_07", "c4_r2-3": "PATH_VER_08",
-    "r1_c1-2": "PATH_HOR_01", "r1_c2-3": "PATH_HOR_02", "r1_c3-4": "PATH_HOR_03",
-    "r2_c1-2": "PATH_HOR_04", "r2_c2-3": "PATH_HOR_05", "r2_c3-4": "PATH_HOR_06",
-    "r3_c1-2": "PATH_HOR_07", "r3_c2-3": "PATH_HOR_08", "r3_c3-4": "PATH_HOR_09"
-  },
+  config: null,
+  
+  selectedPointID: null, 
+  isTeleporting: false, 
 
   pointToHook: {
     "c1_r1": "POINT_01", "c2_r1": "POINT_02", "c3_r1": "POINT_03", "c4_r1": "POINT_04",
@@ -223,6 +211,7 @@ const pathPlanner = {
   },
 
   init(cfg) {
+    this.config = cfg;
     const cam = $("#camera");
     if (cam) {
       cam.setAttribute("look-controls", "enabled", false);
@@ -232,48 +221,11 @@ const pathPlanner = {
     if (cfg?.PLAN_GRID?.COLS) this.cols = cfg.PLAN_GRID.COLS;
     if (cfg?.PLAN_GRID?.ROWS) this.rows = cfg.PLAN_GRID.ROWS;
 
-    if (cfg && Array.isArray(cfg.BLACKLISTED_PATHS)) {
-      cfg.BLACKLISTED_PATHS.forEach(segment => this.blacklistedSegments.add(segment));
-    }
     if (cfg?.PLAN_GRID && Array.isArray(cfg.PLAN_GRID.BLACKLISTED_POINTS)) {
       cfg.PLAN_GRID.BLACKLISTED_POINTS.forEach(pt => this.blacklistedPoints.add(pt));
     }
 
     this.buildGrid(cfg);
-    this.resetBtn.addEventListener("click", () => this.resetRoute());
-
-    this.startBtn.addEventListener("click", () => {
-      this.overlay.style.display = "none";
-      this.load3DPaths();
-      
-      if (this.spawnPointHook && this.sceneRoot) {
-        const hookObj = getByName(this.sceneRoot, this.spawnPointHook);
-        if (hookObj) {
-          const wp = new THREE.Vector3();
-          hookObj.getWorldPosition(wp);
-          const rig = $("#rig");
-          rig.setAttribute("position", `${wp.x} ${wp.y} ${wp.z}`);
-          
-          const pointRot = cfg?.POINT_ROTATIONS?.[this.spawnPointHook] || cfg?.PLAYER?.START_ROTATION || [0, 0, 0];
-          rig.setAttribute("rotation", `${pointRot[0]} ${pointRot[1]} ${pointRot[2]}`);
-        }
-      }
-
-      if (cam) {
-        cam.setAttribute("look-controls", "enabled", true);
-        cam.setAttribute("wasd-controls", "enabled", true);
-      }
-    });
-  },
-
-  resetRoute() {
-    this.activeSegments.clear();
-    this.drawnLines.forEach(line => line.remove());
-    this.drawnLines.clear();
-    const selectedPoints = document.querySelectorAll('.point-selected');
-    selectedPoints.forEach(pt => pt.classList.remove('point-selected'));
-    this.currentPathEnd = null;
-    this.spawnPointHook = null;
   },
 
   buildGrid(cfg) {
@@ -308,58 +260,55 @@ const pathPlanner = {
   },
 
   handlePointClick(el, c, r) {
-    if (!this.currentPathEnd) {
-      this.currentPathEnd = { el, c, r };
-      this.spawnPointHook = this.pointToHook[`c${c}_r${r}`];
-      el.classList.add("point-selected");
+    // Блокування дій, якщо процес переміщення вже ініційовано
+    if (this.isTeleporting) return;
+
+    if (!this.sceneRoot) {
+      console.warn("[PLAN] 3D-сцена ще завантажується. Будь ласка, зачекайте.");
       return;
     }
-    const p1 = this.currentPathEnd;
-    const p2 = { el, c, r };
-    let segmentKey = null;
-    if (p1.c === p2.c && Math.abs(p1.r - p2.r) === 1) {
-      const minR = Math.min(p1.r, p2.r);
-      const maxR = Math.max(p1.r, p2.r);
-      segmentKey = `c${p1.c}_r${minR}-${maxR}`;
-    } else if (p1.r === p2.r && Math.abs(p1.c - p2.c) === 1) {
-      const minC = Math.min(p1.c, p2.c);
-      const maxC = Math.max(p1.c, p2.c);
-      segmentKey = `r${p1.r}_c${minC}-${maxC}`;
-    }
-    if (segmentKey && this.mapping[segmentKey]) {
-      if (this.blacklistedSegments.has(segmentKey)) return; 
-      if (this.activeSegments.has(segmentKey)) {
-        this.activeSegments.delete(segmentKey);
-        const lineObj = this.drawnLines.get(segmentKey);
-        if (lineObj) { lineObj.remove(); this.drawnLines.delete(segmentKey); }
-      } else {
-        this.activeSegments.add(segmentKey);
-        this.drawSVGFast(p1, p2, segmentKey);
-      }
-      p1.el.classList.remove("point-selected");
-      this.currentPathEnd = p2;
-      p2.el.classList.add("point-selected");
-    }
-  },
 
-  drawSVGFast(p1, p2, segmentKey) {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', p1.el.style.left); line.setAttribute('y1', p1.el.style.top);
-    line.setAttribute('x2', p2.el.style.left); line.setAttribute('y2', p2.el.style.top);
-    line.setAttribute('stroke', '#ff3b3b'); line.setAttribute('stroke-width', '4');
-    this.linesContainer.appendChild(line);
-    this.drawnLines.set(segmentKey, line);
-  },
+    const ptID = `c${c}_r${r}`;
 
-  load3DPaths() {
-    if (!this.sceneRoot) return;
-    this.activeSegments.forEach(segmentKey => {
-      const objName = this.mapping[segmentKey];
-      if (objName) {
-        const pathObj = getByName(this.sceneRoot, objName);
-        if (pathObj) pathObj.visible = true;
+    // Логіка першого кліку (вибір точки)
+    if (this.selectedPointID !== ptID) {
+      const previousSelected = document.querySelector('.point-selected');
+      if (previousSelected) previousSelected.classList.remove('point-selected');
+      
+      el.classList.add('point-selected');
+      this.selectedPointID = ptID;
+    } 
+    // Логіка другого кліку (підтвердження вибору та запуск таймера)
+    else {
+      this.isTeleporting = true;
+      
+      const hookName = this.pointToHook[ptID];
+      if (hookName) {
+        const hookObj = getByName(this.sceneRoot, hookName);
+        if (hookObj) {
+          const wp = new THREE.Vector3();
+          hookObj.getWorldPosition(wp);
+          const rig = $("#rig");
+          rig.setAttribute("position", `${wp.x} ${wp.y} ${wp.z}`);
+          
+          const pointRot = this.config?.POINT_ROTATIONS?.[hookName] || this.config?.PLAYER?.START_ROTATION || [0, 0, 0];
+          rig.setAttribute("rotation", `${pointRot[0]} ${pointRot[1]} ${pointRot[2]}`);
+        } else {
+          console.warn(`[SPAWN] Пустишка ${hookName} не знайдена в room.glb`);
+        }
       }
-    });
+
+      // Таймер затримки перед закриттям
+      setTimeout(() => {
+        this.overlay.style.display = "none";
+        const cam = $("#camera");
+        if (cam) {
+          cam.setAttribute("look-controls", "enabled", true);
+          cam.setAttribute("wasd-controls", "enabled", true);
+        }
+        this.isTeleporting = false; 
+      }, 500);
+    }
   }
 };
 
@@ -590,7 +539,6 @@ function setupEnvironment(cfg) {
         if (!child.name) return;
         const nameU = child.name.toUpperCase();
         if (nameU.includes("COLLIDER")) { child.visible = false; if (collSystem) collSystem.colliders.push(child); }
-        if (nameU.includes("PATH_HOR_") || nameU.includes("PATH_VER_")) child.visible = false;
       });
       await applyMaterialOverrides(root3D, cfg);
       await buildWorks(root3D, cfg);
